@@ -1,0 +1,121 @@
+#!/bin/bash
+
+function usage
+{
+    echo "Usage: deb-manual-install <deb package>"
+    echo "Extracts the package into ~/.local/installs/package-name."
+    echo ""
+    echo "This script is mainly intended for use with Termux and Box86-64"
+    echo "for installing x86-64 packages in ARM machines."
+    echo ""
+    echo "Because the way Box86-64 works, if you try to install a package"
+    echo "with APT after adding an architecture like i386 or amd64, "
+    echo "there will be errors because Box86-64 don't use x86-64 libraries."
+    echo ""
+    echo "So, you have to download the desired package and installing it"
+    echo "manually before running it with Box86-64, that will call the"
+    echo "needed libraries for ARM."
+    echo ""
+}
+
+
+function abort
+{
+    REASON=$1
+
+    if ! [ "$REASON" == "" ];
+    then
+        echo "$REASON"
+    fi
+
+    echo ""
+
+    exit 1
+}
+
+
+if [ "$1" == "" ] || [ "$1" == "-h" ] || [ "$1" == "--h" ];
+then
+    usage
+    abort
+fi
+
+
+
+
+PACKAGE=$1
+
+APP_NAME=$(basename $PACKAGE | cut -d '_' -f 1)
+INSTALL_DIR="$HOME/.local/installs/${APP_NAME}"
+
+if ! [ -d "$INSTALL_DIR" ];
+then
+    mkdir -p "$INSTALL_DIR"
+fi
+
+if ! [ -d "$HOME/.local/bin" ];
+then
+    mkdir -p "$HOME/.local/bin"
+fi
+
+
+echo "Installing ${APP_NAME} in ${INSTALL_DIR} ..."
+echo "============================================"
+
+dpkg-deb -x "$PACKAGE" "$INSTALL_DIR"
+
+if ! [ "$?" == "0" ];
+then
+    abort "Failed extracting debian package."
+fi
+
+echo -n "Done. Now, trying to find main executable..."
+
+
+APP_EXEC_PATH=$(find "$INSTALL_DIR" -type f -executable -name "$APP_NAME*")
+
+if [ "$APP_EXEC_PATH" == "" ];
+then
+    echo "Failed."
+    echo "You will have to find it yourself and create a symlink in"
+    echo "~/.local/bin if you want to execute it without entering its path."
+else
+    APP_EXEC=$(basename ${APP_EXEC_PATH})
+
+    ln -s "${APP_EXEC_PATH}" "$HOME/.local/bin/${APP_EXEC}"
+
+    if ! [ "$?" == "0" ];
+    then
+        echo "Failed."
+        echo "Cannot create symlink $HOME/.local/bin/${APP_EXEC}."
+    else
+        echo "Found."
+        echo "Sym-linked ${APP_EXEC_PATH} to $HOME/.local/bin/${APP_EXEC}."
+    fi
+fi
+
+
+echo "Done."
+echo ""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

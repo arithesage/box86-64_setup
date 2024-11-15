@@ -1,0 +1,4 @@
+#!/bin/bash
+
+penter_admin $BOX86_PROOT_NAME
+

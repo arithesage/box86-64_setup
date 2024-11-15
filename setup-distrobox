@@ -1,0 +1,119 @@
+#!/bin/bash
+
+function abort
+{
+    REASON=$1
+
+    if [ "$REASON" == "" ];
+    then
+        echo $REASON
+    fi
+
+    echo ""
+    
+    exit 1
+}
+
+
+if ! [ "$TERMUX_VERSION" == "" ];
+then
+    abort "This script isn't for Termux."
+fi
+
+
+sudo -v
+
+if ! [ "$?" == "0" ];
+then
+    abort "You need to be root, or have sudo permissions."
+fi
+
+
+
+
+if ! [ -f "$HOME/.local/bin/distrobox" ];
+then
+    echo ""
+    echo "Installing Distrobox ..."
+    echo "------------------------"
+
+    sudo apt update
+    sudo apt install -y podman distrobox
+
+    if ! [ "$?" == "0" ];
+    then
+        abort "Failed!"
+    fi
+fi
+
+
+podman image ls | grep bullseye-arm64 > /dev/null
+
+if ! [ "$?" == "0" ];
+then
+    echo ""
+    echo "Downloading Debian bullseye (arm64) image ..."
+    echo "--------------------------------------------------------------------"
+
+    podman pull --arch=arm64 quay.io/toolbx-images/debian-toolbox:11
+
+    if ! [ "$?" == "0" ];
+    then
+        abort "Failed!"
+    fi
+
+    podman tag debian-toolbox:11 bullseye-arm64
+fi
+
+
+echo ""
+echo "Creating Distrobox enviroment for Box86-64 ..."
+echo "----------------------------------------------"
+
+distrobox create -i debian:bullseye-arm64 -n box86-64
+
+if ! [ "$?" == "0" ];
+then
+    abort "Failed!"
+fi
+
+
+echo ""
+echo "Installing basic packages ..."
+echo "-----------------------------"
+
+distrobox enter box86-64 -- sudo apt update
+distrobox enter box86-64 -- sudo apt install -y dialog git gpg mesa-utils wget
+
+
+if ! [ "$?" == "0" ];
+then
+    abort "Failed!"
+fi
+
+
+distrobox enter box86-64 -- sudo mkdir /opt/github
+distrobox enter box86-64 -- sudo chown -R $(id -u):$(id -g) /opt/github
+distrobox enter box86-64 -- sudo chmod -R 770 /opt/github
+
+
+echo ""
+echo "Cloning termux-setup repo (also valid for distrobox) ..."
+echo "--------------------------------------------------------"
+
+distrobox enter box86-64 -- \
+          git clone https://github.com/arithesage/termux-setup.git \
+          /opt/github/termux-setup --depth=1
+
+if ! [ "$?" == "0" ];
+then
+    abort "Failed!"
+fi
+
+
+
+
+
+
+
+

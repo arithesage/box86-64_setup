@@ -1,0 +1,272 @@
+#!/bin/bash
+
+function abort
+{
+    REASON=$1
+
+    if ! [ "$REASON" == "" ];
+    then
+        echo "$REASON"
+    fi
+
+    echo ""
+
+    exit 1
+}
+
+
+if ! [ "$TERMUX_VERSION" == "" ];
+then
+    abort "This script isn't for Termux."
+fi
+
+
+sudo -v
+
+if ! [ "$?" == "0" ];
+then
+    abort "You need to be root, or have sudo permissions."
+fi
+
+
+
+
+ARCH=$(uname -m)
+
+if ! [ "$ARCH" == "aarch64" ];
+then
+    abort "Box64 is intended for running x86_64 binaries in ARM64 platforms."
+fi
+
+
+if [ -f "/usr/local/bin/box64" ];
+then
+    abort "Box64 is already installed."
+fi
+
+
+if [ "$DISTRO_NAME" == "" ];
+then
+    DISTRO_NAME=$(cat /etc/os-release | grep ^ID= | cut -d '=' -f 2)
+
+    if [ "$DISTRO_NAME" == "" ];
+    then
+        echo "Cannot detect distro name."
+        abort "Set DISTRO_NAME environment variable manually."
+    fi
+
+    echo "Detected distro: ${DISTRO_NAME}"
+    echo ""
+fi
+
+
+if ! [ "$ANDROID_DATA" == "" ];
+then
+    BOX86="box64-android"
+else
+    BOX86="box64-generic-arm"
+fi
+
+
+BOX64_MAIN_URL="https://Pi-Apps-Coders.github.io/box64-debs/debian/"
+BOX64_MAIN_GPG_URL="https://pi-apps-coders.github.io/box86-debs/KEY.gpg"
+
+BOX64_ALT_URL="https://ryanfortner.github.io/box86-debs/"
+BOX64_ALT_GPG_URL="https://ryanfortner.github.io/box64-debs/KEY.gpg"
+
+echo "==================="
+echo "--- Box64 setup ---"
+echo "==================="
+
+
+if [ "$DISTRO_NAME" == "ubuntu" ];
+then
+    sudo cp -f "$HOME/apt/fixed-ubuntu_sources.list" /etc/apt/sources.list
+fi
+
+
+if ! [ -f "/usr/bin/gpg" ];
+then
+    echo "Installing needed packages ..."
+    echo "------------------------------"
+
+    sudo apt update
+    sudo apt install -y dialog
+    sudo apt install -y gpg python3 python-is-python3 wget
+
+    echo ""
+fi
+
+
+if ! [ -d "/usr/share/keyrings" ];
+then
+    sudo mkdir -p "/usr/share/keyrings"
+fi
+
+
+echo -n "Checking main box64 url..."
+curl -s $BOX64_MAIN_URL > /dev/null
+
+if [ "$?" == "0" ];
+then
+    BOX64_MAIN_URL_OK=1
+    echo "OK"
+else
+    echo "ERROR"
+fi
+
+
+echo -n "Checking alt box64 url..."
+curl -s $BOX64_ALT_URL > /dev/null
+
+if [ "$?" == "0" ];
+then
+    BOX64_ALT_URL_OK=1
+    echo "OK"
+else
+    echo "ERROR"
+fi
+
+
+if ! [ "$BOX64_MAIN_URL_OK" == "1" ] && ! [ "$BOX64_ALT_URL_OK" == "0"];
+then
+    echo "Failed connecting box64 repositories."
+    echo "Using cached package."
+    echo ""
+
+    USE_CACHED_BOX64=1
+fi
+
+
+curl -s $BOX64_MAIN_URL | grep "Moved" > /dev/null
+
+if [ "$?" == "0" ];
+then
+    echo "It seems main box64 repository is no longer there."
+    echo "Checking alternative ..."
+
+    curl -s $BOX64_ALT_URL | grep "Moved" > /dev/null
+
+    if [ "$?" == "0" ];
+    then
+        echo "This one seems to be gone also."
+        echo "Using cached package."
+
+        USE_CACHED_BOX64=1
+    else
+        BOX64_URL=$BOX64_ALT_URL
+        BOX64_GPG_URL=$BOX64_ALT_GPG_URL
+
+        echo ""
+        echo "Alternative box64 repository will be used."
+    fi
+else
+    BOX64_URL=$BOX64_MAIN_URL
+    BOX64_GPG_URL=$BOX64_MAIN_GPG_URL
+
+    echo ""
+    echo "Main box64 repository will be used."
+fi
+
+
+if ! [ -f "/usr/share/keyrings/box64.gpg" ];
+then
+    if ! [ "$USED_CACHED_BOX64" == "1" ];
+    then
+        wget -qO- "$BOX64_GPG_URL" | \
+        sudo gpg --dearmor -o "/usr/share/keyrings/box64.gpg"
+    else
+        ls "$HOME/deb/*.gpg" | \
+        sudo gpg --dearmor -o "/usr/share/keyrings/box64.gpg"
+    fi
+
+    if ! [ "$?" == "0" ];
+    then
+        if [ -f "/usr/share/keyrings/box64.gpg" ];
+        then
+            sudo rm /usr/share/keyrings/box64.gpg
+        fi
+
+        abort "Could not intall Box64 GPG key."
+    fi
+
+    echo "Added GPG key to keyrings."
+fi
+
+
+if ! [ "$USE_CACHED_BOX64" == "1" ];
+then
+    if ! [ -f "/etc/apt/sources/list.d/box64.sources" ];
+    then
+        echo "Types: deb" > /var/tmp/box64.sources
+
+        echo "URIs: $BOX64_URL" \
+        >> /var/tmp/box64.sources
+
+        echo "Suites: ./" >> /var/tmp/box64.sources
+        echo "Signed-By: /usr/share/keyrings/box64.gpg" \
+        >> /var/tmp/box64.sources
+
+        sudo mv /var/tmp/box64.sources /etc/apt/sources.list.d/
+
+        echo "Added sources list for APT."
+    fi
+fi
+
+
+sudo dpkg --add-architecture amd64
+
+echo "Enabled amd64 architecture in dpkg."
+
+
+if [ "$DISTRO_NAME" == "ubuntu" ];
+then
+    sudo cp "$HOME/apt/ubuntu-amd64.list" /etc/apt/sources.list.d/
+fi
+
+
+echo ""
+echo "Updating APT sources..."
+echo "-----------------------"
+
+sudo apt update
+
+
+echo ""
+echo "Installing ${BOX64} ..."
+echo "----------------------------"
+
+if ! [ "$USE_CACHED_BOX64"=="1" ];
+then
+    sudo apt install -y ${BOX64}
+else
+    sudo dpkg -i $(ls deb/box64*.deb)
+fi
+
+if ! [ "$?" == "0" ];
+then
+    echo ""
+    abort "Failed installing box64."
+fi
+
+
+grep .local/bin "$HOME/.environment" > /dev/null
+
+if ! [ "$?" == "0" ];
+then
+    echo "export PATH=\$PATH:\$HOME/scripts" >> "$HOME/.environment"
+    echo "export PATH=\$PATH:\$HOME/.local/bin" >> "$HOME/.environment"
+
+    grep .environment $HOME/.bashrc > /dev/null
+
+    if ! [ "$?" == "0" ];
+    then
+        echo "source \$HOME/.environment" >> $HOME/.bashrc
+    fi
+fi
+
+
+echo ""
+echo "Finished!"
+echo ""
+

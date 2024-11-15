@@ -1,0 +1,165 @@
+#!/bin/bash
+
+function abort
+{
+    REASON=$1
+
+    if [ "$REASON" == "" ];
+    then
+        echo $REASON
+    fi
+
+    echo ""
+    
+    exit 1
+}
+
+
+
+
+export BOX86_PROOT_DISTRO="debian-oldstable"
+export BOX86_PROOT_NAME="box86-64"
+export BOX86_PROOT_USER="puser"
+
+PROOTS_PATH="$PREFIX/var/lib/proot-distro/installed-rootfs"
+BOX86_PROOT_PATH="$PROOTS_PATH/$BOX86_PROOT_NAME"
+
+
+if ! [ -f "$HOME/scripts/penter" ];
+then
+    mkdir -p "$HOME/scripts"
+
+    cp "$HOME/termux-setup/proot/pexec_admin" "$HOME/scripts/"
+    cp "$HOME/termux-setup/proot/penter" "$HOME/scripts/"
+    cp "$HOME/termux-setup/proot/penter_admin" "$HOME/scripts/"
+    cp "$HOME/termux-setup/proot/pexec" "$HOME/scripts/"
+fi
+
+
+if ! [ -f "$HOME/scripts/boxenter" ];
+then
+    mkdir -p "$HOME/scripts"
+
+    cp "$HOME/termux-setup/box86-64/bexec_admin" "$HOME/scripts/"
+    cp "$HOME/termux-setup/box86-64/boxenter" "$HOME/scripts/"
+    cp "$HOME/termux-setup/box86-64/boxenter_admin" "$HOME/scripts/"
+    cp "$HOME/termux-setup/box86-64bexec" "$HOME/scripts/"
+
+    echo "export PATH=\$PATH:\$HOME/scripts" >> "$HOME/.environment"
+
+    export PATH=$PATH:$HOME/scripts
+fi
+
+chmod -R +x $HOME/scripts
+
+
+if ! [ -f "$HOME/.box86-proot_env" ];
+then
+    echo "source \$HOME/.box86-proot_env" >> "$HOME/.environment"
+
+    echo "export BOX86_PROOT_DISTRO=\"${BOX86_PROOT_DISTRO}\"" >> \
+         "$HOME/.box86-proot_env"
+
+    echo "export BOX86_PROOT_NAME=\"${BOX86_PROOT_NAME}\"" >> \
+         "$HOME/.box86-proot_env"
+
+    echo "export BOX86_PROOT_USER=\"${BOX86_PROOT_USER}\"" >> \
+         "$HOME/.box86-proot_env"
+
+    echo "export BOX86_PROOT_PATH=\"${BOX86_PROOT_PATH}\"" >> \
+         "$HOME/.box86-proot_env"    
+fi
+
+
+if ! [ -f "${PREFIX}/bin/proot-distro" ];
+then
+    echo "Installing proot-distro ..."
+    echo "---------------------------"
+    
+    pkg update
+    pkg install -y proot-distro
+
+    if ! [ "$?" == "0" ];
+    then
+        abort "Failed."
+    fi
+fi
+
+
+if ! [ -d "$BOX86_PROOT_PATH" ];
+then
+    echo ""
+    echo "Installing ${BOX86_PROOT_NAME} ..."
+    echo "-----------------------------------------"
+
+    proot-distro install ${BOX86_PROOT_DISTRO} \
+                         --override-alias $BOX86_PROOT_NAME
+
+    if ! [ "$?" == "0" ];
+    then
+        abort "Failed."
+    fi
+fi
+
+
+if ! [ -f "$BOX86_PROOT_PATH/usr/bin/gpg" ];
+then
+    echo ""
+    echo "Installing some basic packages..."
+    echo "---------------------------------"
+
+    bexec_admin apt update
+    bexec_admin apt upgrade -y
+    bexec_admin apt install -y dialog gpg mesa-utils sudo wget
+fi
+
+
+echo "export DISPLAY=:0" >> \
+         "${BOX86_PROOT_PATH}/root/.environment"
+
+echo "source \$HOME/.environment" >> "$BOX86_PROOT_PATH/root/.bashrc"
+
+
+if ! [ -d "$BOX86_PROOT_PATH/home/$BOX86_PROOT_USER" ];
+then
+    echo ""
+    echo "Creating a regular user without admin privileges..."
+    echo "---------------------------------------------------"
+
+    bexec_admin useradd --create-home 
+                --shell /bin/bash $BOX86_PROOT_USER
+
+    echo "export DISPLAY=:0" >> \
+         "${BOX86_PROOT_PATH}/home/${BOX86_PROOT_USER}/.environment"
+
+    echo "source \$HOME/.environment" >> \
+         "${BOX86_PROOT_PATH}/home/${BOX86_PROOT_USER}/.bashrc"
+fi
+
+
+echo ""
+echo "Box86-64 proot environment ready."
+echo ""
+echo "The following scripts have been added to your PATH:"
+echo ""
+echo "- bexec_admin:    Executes a command line in the proot as root."
+echo "                  This is the recommended way to install software"
+echo "                  rather than using sudo."
+echo ""
+echo "                  Remember that this way your home dir is"
+echo "                  /root instead of /home/${BOX86_PROOT_USER}."
+echo ""
+echo "- bexec:          Executes a command line as ${BOX86_PROOT_USER}."
+echo "- boxenter:       Enter the proot environment as ${BOX86_PROOT_USER}."
+echo "- boxenter_admin: Enter the proot environment as root."
+echo ""
+
+
+
+
+
+
+
+
+
+

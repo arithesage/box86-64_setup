@@ -1,0 +1,96 @@
+#!/bin/bash
+
+function usage
+{
+    echo "Usage: deb-install-deps <package name>"
+    echo ""
+    echo "Search the required dependencies for the given package and"
+    echo "install them with it."
+    echo ""
+    echo "Those dependencies that are system libraries will be installed"
+    echo "with the current system architecture."
+    echo ""
+}
+
+
+function abort
+{
+    REASON=$1
+
+    if ! [ "$REASON" == "" ];
+    then
+        echo "$REASON"
+    fi
+
+    echo ""
+
+    exit 1
+}
+
+
+if [ "$1" == "" ] || [ "$1" == "-h" ] || [ "$1" == "--h" ];
+then
+    usage
+    abort
+fi
+
+
+
+
+PACKAGE=$1
+DEB_DOWNLOADS="$HOME/.local/deb-downloads"
+DEB_INSTALLS="$HOME/.local/installs"
+
+
+ARCH=$(uname -m)
+
+if [[ $ARCH == armv* ]];
+then
+    ARCH="armhf"
+elif [ "$ARCH" == "aarch64" ]];
+then
+    ARCH="arm64"
+else
+    abort "This script is intended to be used in ARM devices."
+fi
+
+
+if ! [ -d "$DEB_DOWNLOADS" ];
+then
+    mkdir -p "$DEB_DOWNLOADS"
+fi
+
+cd "$DEB_DOWNLOADS"
+
+echo "Checking dependencies of ${PACKAGE} ..."
+
+for dep in $(deb-deps ${PACKAGE});
+do
+    if [[ $dep == *lib* ]];
+    then
+        echo ""
+        echo "Installing ${dep}:${ARCH} ..."
+        echo "======================================="
+        apt install ${dep}:${ARCH}
+
+    else
+        echo "Downloading ${dep} ..."
+        echo "================================"
+        apt download $dep
+
+        if ! [ "$?" == "0" ];
+        then
+            abort "No package with that name was found."
+        fi
+
+        DEB_PACKAGE=$(ls ${dep}_*.deb)
+
+        if [ -f "$DEB_PACKAGE" ];
+        then
+            deb-manual-install "$DEB_PACKAGE"
+            cp -r "$DEB_INSTALLS/${dep}/*" "$DEB_INSTALLS/${PACKAGE}/"
+            rm -r "$DEB_INSTALLS/${dep}"
+        fi
+    fi
+done
+

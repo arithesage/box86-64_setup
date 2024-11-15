@@ -1,0 +1,140 @@
+#!/usr/bin/env python
+
+from subprocess import run
+from subprocess import CompletedProcess, PIPE, STDOUT
+
+import sys
+
+
+class ExecResult:
+    ok = False
+    return_code = -1
+    stdout = ""
+    stderr = ""
+
+    def __init__(self, completed_process: CompletedProcess) -> None:
+        ExecResult.stderr = completed_process.stderr
+        ExecResult.stdout = completed_process.stdout
+        ExecResult.return_code = completed_process.returncode
+        ExecResult.ok = (completed_process.returncode == 0)
+
+
+def array_to_str (array, sep: str = " ") -> str:
+    string = ""
+
+    if (array != None) and (len (array) != 0):
+        for item in array:
+            string += (item + sep)
+
+        string = string.strip (sep)
+
+    return string
+
+
+def type_of (variable: str, variable_type) -> bool:
+    """
+    Alias for 'isinstance'.
+    Returns if a variable is of the given type.
+    """
+    return isinstance (variable, variable_type)
+
+
+def shellexec (cmdline, 
+               run_from: str = None, 
+               capture_output: bool = True) -> ExecResult:
+    """
+    As exec, executes a command line, but this time it uses the shell
+    for doing it. And because this, the command line must be provided
+    as a string.
+
+    If an array is provided, it will be converted to an string.
+    """
+
+    if not type_of (cmdline, str):
+        cmdline = array_to_str (cmdline)
+    
+    if capture_output:
+        exec_result = run (cmdline, 
+                           shell=True, 
+                           cwd=run_from, 
+                           stdout=PIPE,
+                           stderr=STDOUT,
+                           text=True)
+    else:
+        exec_result = run (cmdline, shell=True, cwd=run_from)
+
+    return ExecResult (exec_result)
+
+
+def exec (cmdline, run_from: str = None, capture_output: bool = False, 
+          use_shell: bool = False) -> ExecResult:
+    """
+    Executes a command line.
+
+    The command line can be an string or a list.
+    If an string is passed, it will converteed to list.
+
+    Set 'run_from' to change the current working dir.
+
+    Enable 'use_shell' if you want to execute the
+    command line through the system's shell.
+
+    This will call shellexec.
+    """
+
+    if type_of (cmdline, str):
+        cmdline = cmdline.split (" ")
+
+    if use_shell:
+        if (type_of (cmdline, tuple)):
+            cmdline_str = ""
+
+            for chunk in cmdline:
+                cmdline_str += chunk
+                cmdline_str += " "
+
+            cmdline = cmdline_str.strip()
+
+            return shellexec (cmdline, run_from, capture_output)
+    else:
+        if capture_output:
+            exec_result = run (cmdline, cwd=run_from,
+                               stdout=PIPE, stderr=STDOUT,
+                               text=True)
+        else:
+            exec_result = run (cmdline, cwd=run_from)
+
+        return ExecResult (exec_result)
+
+
+
+
+if __name__ == "__main__":
+    argv = sys.argv
+    argc = len (argv[1:])
+    
+    if (argc != 1):
+        print ("Need a package name for searching its dependencies.")
+        print ()
+        exit (1)
+
+    package = argv[1]
+    package_deps = []
+
+    cmdline = []
+    cmdline.append ("apt-cache")
+    cmdline.append ("depends")
+    cmdline.append (package)
+
+    deps_string = exec (cmdline, capture_output=True).stdout
+    deps_entries = deps_string.split("\n ")
+
+    for entry in deps_entries:
+        if entry.strip().startswith("Depends:"):
+            dep = entry.strip().split()[1]
+            package_deps.append (dep)
+
+    for dep in package_deps:
+        print (dep)
+
+

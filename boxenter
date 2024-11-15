@@ -1,0 +1,4 @@
+#!/bin/bash
+
+penter $BOX86_PROOT_NAME $BOX86_PROOT_USER
+

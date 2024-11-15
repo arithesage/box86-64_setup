@@ -1,0 +1,4 @@
+#!/bin/bash
+
+pexec_admin $BOX86_PROOT_NAME $*
+
