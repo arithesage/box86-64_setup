@@ -34,7 +34,7 @@ SCRIPT_DIR=$(realpath $(dirname $0))
 
 
 
-FORCE_CACHE=1
+FORCE_CACHE=0
 
 
 ARCH=$(uname -m)

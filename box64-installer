@@ -1,0 +1,205 @@
+#!/bin/bash
+
+function abort
+{
+    REASON=$1
+
+    if ! [ "$REASON" == "" ];
+    then
+        echo "$REASON"
+    fi
+
+    echo ""
+
+    exit 1
+}
+
+
+if ! [ "$TERMUX_VERSION" == "" ];
+then
+    abort "This script isn't for Termux."
+fi
+
+
+sudo -v
+
+if ! [ "$?" == "0" ];
+then
+    abort "You need to be root, or have sudo permissions."
+fi
+
+
+SCRIPT_DIR=$(realpath $(dirname $0))
+
+
+
+
+FORCE_CACHE=0
+
+
+ARCH=$(uname -m)
+
+
+if ! [ "$ARCH" == "aarch64" ];
+then
+    abort "Box64 is intended for running x86_64 binaries in ARM64 platforms."
+fi
+
+
+if [ -f "/usr/local/bin/box64" ];
+then
+    abort "Box64 is already installed."
+fi
+
+
+if ! [ "$ANDROID_DATA" == "" ];
+then
+    IN_ANDROID=1
+    BOX64_PACKAGE="box64-android"
+else
+    BOX64_PACKAGE="box64-generic-arm"
+fi
+
+
+BOX64_MAIN_URL="https://Pi-Apps-Coders.github.io/box64-debs/debian/"
+BOX64_MAIN_GPG_URL="https://pi-apps-coders.github.io/box64-debs/KEY.gpg"
+
+BOX64_ALT_URL="https://ryanfortner.github.io/box64-debs/"
+BOX64_ALT_GPG_URL="https://ryanfortner.github.io/box64-debs/KEY.gpg"
+
+DISTRO_NAME=$("$SCRIPT_DIR/os_name")
+DISTRO_VERSION_NAME=$("$SCRIPT_DIR/os_version_name")
+
+CACHE="$SCRIPT_DIR/cache/debian"
+
+
+if ! [ "$FORCE_CACHE" == "1" ];
+then
+    source "$SCRIPT_DIR/check_sites"
+else
+    USE_CACHE=1
+
+    echo "Forcing using cached packages."
+fi
+
+
+if ! [ "$FORCE_CACHE" == "1" ];
+then
+    if ! [ "$BOX86_MAIN_URL_OK" == "1" ] && ! [ "$BOX86_ALT_URL_OK" == "1" ];
+    then
+        USE_CACHE=1
+
+        echo "Failed connecting Box64 repositories."
+        echo "Using cached packages."
+        echo ""
+
+    elif [ "$BOX86_MAIN_URL_OK" == "1" ];
+    then
+        BOX64_URL=$BOX64_MAIN_URL
+        BOX64_GPG_URL=$BOX64_MAIN_GPG_URL
+
+        echo "Using main Box64 repository."
+        echo ""
+
+    else
+        BOX64_URL=$BOX64_ALT_URL
+        BOX64_GPG_URL=$BOX64_ALT_GPG_URL
+
+        echo "Using second Box64 repository."
+        echo ""
+    fi
+fi
+
+
+if ! [ "$USE_CACHE" == "1" ];
+then
+    if ! [ -f "/usr/share/keyrings/box64.gpg" ];
+    then
+        if ! [ -d "/usr/share/keyrings" ];
+        then
+            sudo mkdir -p "/usr/share/keyrings"
+        fi
+
+        wget -qO- "$BOX64_GPG_URL" | \
+        sudo gpg --dearmor -o "/usr/share/keyrings/box64.gpg"
+
+        if ! [ "$?" == "0" ];
+        then
+            if [ -f "/usr/share/keyrings/box64.gpg" ];
+            then
+                sudo rm /usr/share/keyrings/box64.gpg
+            fi
+
+            abort "Could not intall Box64 GPG key."
+        fi
+
+        echo "Added GPG key to keyrings."
+    fi
+
+
+    if ! [ -f "/etc/apt/sources/list.d/box64.sources" ];
+    then
+        echo "Types: deb" > /var/tmp/box64.sources
+
+        echo "URIs: $BOX64_URL" \
+        >> /var/tmp/box64.sources
+
+        echo "Suites: ./" >> /var/tmp/box64.sources
+        echo "Signed-By: /usr/share/keyrings/box64.gpg" \
+        >> /var/tmp/box64.sources
+
+        sudo mv /var/tmp/box64.sources /etc/apt/sources.list.d/
+
+        echo "Added sources list for APT."
+    fi
+fi
+
+
+if ! [ "$USE_CACHE" == "1" ];
+then
+    echo ""
+    echo "Refreshing available packages in APT..."
+    echo "---------------------------------------"
+
+    sudo apt update
+fi
+
+
+echo ""
+echo "Installing ${BOX64_PACKAGE} ..."
+echo "------------------------------------"
+
+
+if ! [ "$USE_CACHE" == "1" ];
+then
+    sudo apt install -y ${BOX64_PACKAGE}
+else
+    if [ "$IN_ANDROID" == "1" ];
+    then
+        sudo dpkg -i $(ls $CACHE/box64-android_*.deb)
+    else
+        sudo dpkg -i $(ls $CACHE/box64-generic-arm_*.deb)
+    fi
+fi
+
+if ! [ "$?" == "0" ];
+then
+    echo ""
+    abort "Failed installing Box64."
+fi
+
+
+sudo cp "$SCRIPT_DIR/scripts/boxify" /usr/local/bin/
+sudo cp "$SCRIPT_DIR/scripts/unboxify" /usr/local/bin/
+
+sudo chmod +x /usr/local/bin/boxify
+sudo chmod +x /usr/local/bin/unboxify
+
+echo "Finished."
+echo ""
+
+
+
+
+
+
