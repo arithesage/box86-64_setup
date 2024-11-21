@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo $(cat /etc/os-release | grep CODENAME | cut -d '=' -f 2)
+echo ""

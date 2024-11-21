@@ -1,0 +1,30 @@
+#!/bin/bash
+
+
+echo -n "Checking main box86 url... "
+curl -s https://Pi-Apps-Coders.github.io > /dev/null
+
+if [ "$?" == "0" ];
+then
+    BOX86_MAIN_URL_OK=1
+    echo "OK"
+else
+    echo "ERROR"
+fi
+
+
+echo "Checking alt box86 url... "
+curl -s https://ryanfortner.github.io > /dev/null
+
+if [ "$?" == "0" ];
+then
+    BOX86_ALT_URL_OK=1
+    echo "OK"
+else
+    echo "ERROR"
+fi
+
+
+
+
+

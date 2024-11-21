@@ -29,9 +29,13 @@ then
 fi
 
 
+SCRIPT_DIR=$(realpath $(dirname $0))
+
+
 
 
 ARCH=$(uname -m)
+
 
 if ! [[ $ARCH == armv* ]] && ! [ "$ARCH" == "aarch64" ];
 then
@@ -45,158 +49,68 @@ then
 fi
 
 
-if [ "$DISTRO_NAME" == "" ];
-then
-    DISTRO_NAME=$(cat /etc/os-release | grep ^ID= | cut -d '=' -f 2)
-
-    if [ "$DISTRO_NAME" == "" ];
-    then
-        echo "Cannot detect distro name."
-        abort "Set DISTRO_NAME environment variable manually."
-    fi
-
-    echo "Detected distro: ${DISTRO_NAME}"
-    echo ""
-fi
-
-
-if ! [ "$ANDROID_DATA" == "" ];
-then
-    BOX86="box86-android"
-else
-    BOX86="box86-generic-arm"
-fi
-
-
 BOX86_MAIN_URL="https://Pi-Apps-Coders.github.io/box86-debs/debian/"
 BOX86_MAIN_GPG_URL="https://pi-apps-coders.github.io/box86-debs/KEY.gpg"
 
 BOX86_ALT_URL="https://ryanfortner.github.io/box86-debs/"
 BOX86_ALT_GPG_URL="https://ryanfortner.github.io/box86-debs/KEY.gpg"
 
+DISTRO_NAME=$("$SCRIPT_DIR/os_name")
+DISTRO_VERSION_NAME=$("$SCRIPT_DIR/os_version_name")
 
-echo "==================="
-echo "--- Box86 setup ---"
-echo "==================="
+
+source "$SCRIPT_DIR/check_sites"
+
+if ! [ "$BOX86_MAIN_URL_OK" == "1" ] && ! [ "$BOX86_ALT_URL_OK" == "1" ];
+then
+    echo "Failed connecting box86 repositories."
+    echo "Using cached packages."
+    echo ""
+
+    USE_CACHE=1
+fi
+
+
+sudo dpkg --add-architecture armhf
+sudo dpkg --add-architecture i386
+
+echo "Enabled armhf and i386 architectures in dpkg"
+echo "if they were not enabled yet."
+echo ""
 
 
 if [ "$DISTRO_NAME" == "ubuntu" ];
 then
-    sudo cp -f "$HOME/apt/fixed-ubuntu_sources.list" /etc/apt/sources.list
-fi
-
-
-if ! [ -f "/usr/bin/gpg" ];
-then
-    echo "Installing needed packages ..."
-    echo "------------------------------"
-
-    sudo apt update
-    sudo apt install -y dialog
-    sudo apt install -y gpg python3 python-is-python3 wget
-
-    echo ""
-fi
-
-
-if ! [ -d "/usr/share/keyrings" ];
-then
-    sudo mkdir -p "/usr/share/keyrings"
-fi
-
-
-echo -n "Checking main box86 url..."
-curl -s $BOX86_MAIN_URL > /dev/null
-
-if [ "$?" == "0" ];
-then
-    BOX86_MAIN_URL_OK=1
-    echo "OK"
-else
-    echo "ERROR"
-fi
-
-
-echo "Checking alt box86 url..."
-curl -s $BOX86_ALT_URL > /dev/null
-
-if [ "$?" == "0" ];
-then
-    BOX86_ALT_URL_OK=1
-    echo "OK"
-else
-    echo "ERROR"
-fi
-
-
-if ! [ "$BOX86_MAIN_URL_OK" == "1" ] && ! [ "$BOX86_ALT_URL_OK" == "0"];
-then
-    echo "Failed connecting box86 repositories."
-    echo "Using cached package."
-    echo ""
-
-    USE_CACHED_BOX86=1
-fi
-
-
-curl -s $BOX86_MAIN_URL | grep "Moved" > /dev/null
-
-if [ "$?" == "0" ];
-then
-    echo "It seems main box86 repository is no longer there."
-    echo "Checking alternative ..."
-
-    curl -s $BOX86_ALT_URL | grep "Moved" > /dev/null
-
-    if [ "$?" == "0" ];
-    then
-        echo "This one seems to be gone also."
-        echo "Using cached package."
-
-        USE_CACHED_BOX86=1
-    else
-        BOX86_URL=$BOX86_ALT_URL
-        BOX86_GPG_URL=$BOX86_ALT_GPG_URL
-
-        echo ""
-        echo "Alternative box86 repository will be used."
-    fi
-else
-    BOX86_URL=$BOX86_MAIN_URL
-    BOX86_GPG_URL=$BOX86_MAIN_GPG_URL
-
-    echo ""
-    echo "Main box86 repository will be used."
-fi
-
-
-if ! [ -f "/usr/share/keyrings/box86.gpg" ];
-then
-    if ! [ "$USED_CACHED_BOX86" == "1"];
-    then
-        wget -qO- "$BOX86_GPG_URL" | \
-        sudo gpg --dearmor -o "/usr/share/keyrings/box86.gpg"
-    else
-        ls "$HOME/deb/*.gpg" | \
-        sudo gpg --dearmor -o "/usr/share/keyrings/box86.gpg"
-    fi
+    sudo cp "$SCRIPT_DIR/apt/ubuntu-i386.list" /etc/apt/sources.list.d/
 
     if ! [ "$?" == "0" ];
     then
-        if [ -f "/usr/share/keyrings/box86.gpg" ];
-        then
-            sudo rm /usr/share/keyrings/box86.gpg
-        fi
-
-        abort "Could not intall Box86 GPG key."
+        abort "Could not add Ubuntu i386 sources.list to APT."
     fi
-
-    echo "Added GPG key to keyrings."
 fi
 
 
-if ! [ "$USE_CACHED_BOX86" == "1" ];
+if ! [ "$USE_CACHE" == "1" ];
 then
+    if ! [ -f "/usr/share/keyrings/box86.gpg" ];
+    then
+        wget -qO- "$BOX86_GPG_URL" | \
+        sudo gpg --dearmor -o "/usr/share/keyrings/box86.gpg"
+
+        if ! [ "$?" == "0" ];
+        then
+            if [ -f "/usr/share/keyrings/box86.gpg" ];
+            then
+                sudo rm /usr/share/keyrings/box86.gpg
+            fi
+
+            abort "Could not intall Box86 GPG key."
+        fi
+
+        echo "Added GPG key to keyrings."
+    fi
+
+
     if ! [ -f "/etc/apt/sources/list.d/box86.sources" ];
     then
         echo "Types: deb" > /var/tmp/box86.sources
@@ -215,69 +129,14 @@ then
 fi
 
 
-sudo dpkg --add-architecture armhf
-sudo dpkg --add-architecture i386
-
-echo "Enabled armhf and i386 architectures in dpkg."
 
 
-if [ "$DISTRO_NAME" == "ubuntu" ];
-then
-    sudo cp "$HOME/apt/ubuntu-i386.list" /etc/apt/sources.list.d/
-fi
 
 
-echo ""
-echo "Updating APT sources..."
-echo "-----------------------"
-
-sudo apt update
 
 
-echo ""
-echo "Installing libc6 and ${BOX86} ..."
-echo "--------------------------------------"
-
-sudo apt install -y libc6:armhf
-
-if ! [ "$?" == "0" ];
-then
-    echo ""
-    abort "Failed installing libc6."
-fi
 
 
-if ! [ "$USE_CACHED_BOX86"=="1" ];
-then
-    sudo apt install -y ${BOX86}
-else
-    sudo dpkg -i $(ls deb/box86*.deb)
-fi
-
-if ! [ "$?" == "0" ];
-then
-    echo ""
-    abort "Failed installing box86."
-fi
 
 
-grep .local/bin "$HOME/.environment" > /dev/null
-
-if ! [ "$?" == "0" ];
-then
-    echo "export PATH=\$PATH:\$HOME/scripts" >> "$HOME/.environment"
-    echo "export PATH=\$PATH:\$HOME/.local/bin" >> "$HOME/.environment"
-
-    grep .environment $HOME/.bashrc > /dev/null
-
-    if ! [ "$?" == "0" ];
-    then
-        echo "source \$HOME/.environment" >> $HOME/.bashrc
-    fi
-fi
-
-
-echo ""
-echo "Finished!"
-echo ""
 
