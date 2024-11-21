@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-echo -n "Checking main box86 url... "
+echo -n "Checking main Box86 repository... "
 curl -s https://Pi-Apps-Coders.github.io > /dev/null
 
 if [ "$?" == "0" ];
@@ -13,7 +13,7 @@ else
 fi
 
 
-echo "Checking alt box86 url... "
+echo -n "Checking alt Box86 repository... "
 curl -s https://ryanfortner.github.io > /dev/null
 
 if [ "$?" == "0" ];
@@ -24,6 +24,7 @@ else
     echo "ERROR"
 fi
 
+echo ""
 
 
 

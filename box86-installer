@@ -34,6 +34,9 @@ SCRIPT_DIR=$(realpath $(dirname $0))
 
 
 
+FORCE_CACHE=1
+
+
 ARCH=$(uname -m)
 
 
@@ -49,6 +52,15 @@ then
 fi
 
 
+if ! [ "$ANDROID_DATA" == "" ];
+then
+    IN_ANDROID=1
+    BOX86_PACKAGE="box86-android"
+else
+    BOX86_PACKAGE="box86-generic-arm"
+fi
+
+
 BOX86_MAIN_URL="https://Pi-Apps-Coders.github.io/box86-debs/debian/"
 BOX86_MAIN_GPG_URL="https://pi-apps-coders.github.io/box86-debs/KEY.gpg"
 
@@ -58,25 +70,44 @@ BOX86_ALT_GPG_URL="https://ryanfortner.github.io/box86-debs/KEY.gpg"
 DISTRO_NAME=$("$SCRIPT_DIR/os_name")
 DISTRO_VERSION_NAME=$("$SCRIPT_DIR/os_version_name")
 
+CACHE="$SCRIPT_DIR/cache/debian"
 
-source "$SCRIPT_DIR/check_sites"
 
-if ! [ "$BOX86_MAIN_URL_OK" == "1" ] && ! [ "$BOX86_ALT_URL_OK" == "1" ];
+if ! [ "$FORCE_CACHE" == "1" ];
 then
-    echo "Failed connecting box86 repositories."
-    echo "Using cached packages."
-    echo ""
-
+    source "$SCRIPT_DIR/check_sites"
+else
     USE_CACHE=1
+
+    echo "Forcing using cached packages."
 fi
 
+if ! [ "$FORCE_CACHE" == "1" ];
+then
+    if [ "$BOX86_MAIN_URL_OK" == "1" ] && ! [ "$BOX86_ALT_URL_OK" == "1" ];
+    then
+        USE_CACHE=1
 
-sudo dpkg --add-architecture armhf
-sudo dpkg --add-architecture i386
+        echo "Failed connecting box86 repositories."
+        echo "Using cached packages."
+        echo ""
 
-echo "Enabled armhf and i386 architectures in dpkg"
-echo "if they were not enabled yet."
-echo ""
+    elif [ "$BOX86_MAIN_URL_OK" == "1" ];
+    then
+        BOX86_URL=$BOX86_MAIN_URL
+        BOX86_GPG_URL=$BOX86_MAIN_GPG_URL
+
+        echo "Using main Box86 repository."
+        echo ""
+
+    else
+        BOX86_URL=$BOX86_ALT_URL
+        BOX86_GPG_URL=$BOX86_ALT_GPG_URL
+
+        echo "Using second Box86 repository."
+        echo ""
+    fi
+fi
 
 
 if [ "$DISTRO_NAME" == "ubuntu" ];
@@ -94,6 +125,11 @@ if ! [ "$USE_CACHE" == "1" ];
 then
     if ! [ -f "/usr/share/keyrings/box86.gpg" ];
     then
+        if ! [ -d "/usr/share/keyrings" ];
+        then
+            sudo mkdir -p "/usr/share/keyrings"
+        fi
+
         wget -qO- "$BOX86_GPG_URL" | \
         sudo gpg --dearmor -o "/usr/share/keyrings/box86.gpg"
 
@@ -129,11 +165,66 @@ then
 fi
 
 
+sudo dpkg --add-architecture armhf
+sudo dpkg --add-architecture i386
+
+echo ""
+echo "Enabled armhf and i386 architectures in dpkg"
+echo "if they were not enabled yet."
 
 
+echo ""
+echo "Refreshing available packages in APT..."
+echo "---------------------------------------"
+
+sudo apt update
 
 
+echo ""
+echo "Installing libc6 if wasn't yet ..."
+echo "----------------------------------"
 
+sudo apt install -y libc6:armhf
+
+if ! [ "$?" == "0" ];
+then
+    echo ""
+    abort "Failed installing libc6."
+fi
+
+
+echo ""
+echo "Installing ${BOX86_PACKAGE} ..."
+echo "------------------------------------"
+
+
+if ! [ "$USE_CACHE" == "1" ];
+then
+    sudo apt install -y ${BOX86_PACKAGE}
+else
+    if [ "$IN_ANDROID" == "1" ];
+    then
+        sudo dpkg -i $(ls $CACHE/box86-android_*.deb)
+    else
+        sudo dpkg -i $(ls $CACHE/box86-generic-arm_*.deb)
+    fi
+fi
+
+if ! [ "$?" == "0" ];
+then
+    echo ""
+    abort "Failed installing Box86."
+fi
+
+
+sudo cp "$SCRIPT_DIR/scripts/boxify" /usr/local/bin/
+sudo cp "$SCRIPT_DIR/scripts/unboxify" /usr/local/bin/
+
+sudo chmod +x /usr/local/bin/boxify
+sudo chmod +x /usr/local/bin/unboxify
+
+echo "Finished."
+echo ""
 
 
 
