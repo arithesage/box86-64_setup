@@ -109,22 +109,22 @@ LINUX_X64=$?
 
 if [ "$LINUX_X86" == "0" ];
 then
-    boxify_exec "$EXEC" box86
-
     if ! [ "/usr/local/bin/box86" ];
     then
-        echo "WARNING: Box86 has not been detected."
-        echo "You need it for executing this script."
+        echo "Box86 has not been detected."
+        echo "Can't boxify i386 executable."
+    else
+        boxify_exec "$EXEC" box86
     fi
 
 elif [ "$LINUX_X64" == "0" ];
 then
-    boxify_exec "$EXEC" box64
-    
     if ! [ "/usr/local/bin/box64" ];
     then
-        echo "WARNING: Box64 has not been detected."
-        echo "You need it for executing this script."
+        echo "Box64 has not been detected."
+        echo "Can't boxify amd64 executable."
+    else
+        boxify_exec "$EXEC" box64
     fi
 
 else
